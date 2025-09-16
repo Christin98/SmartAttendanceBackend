@@ -97,34 +97,33 @@ module.exports = (pool) => {
       // Insert attendance record
       const insertQuery = `
         INSERT INTO attendance (
-          employee_id, check_type, timestamp,
-          location, device_id, mode, sync_status
+          employee_id, employee_name, check_type, timestamp,
+          device_id, synced_at, confidence
         )
-        VALUES ($1, $2, $3, $4, $5, $6, 'SYNCED')
+        VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, 1.0)
         RETURNING *
       `;
 
       const result = await pool.query(insertQuery, [
         employeeId,
+        employeeName,
         checkType,
         currentTimestamp, // Pass as BIGINT (milliseconds since epoch)
-        location || null,
-        deviceId,
-        mode
+        deviceId
       ]);
       
       const attendance = result.rows[0];
       res.status(201).json({
         id: attendance.id,
         employeeId: attendance.employee_id,
-        employeeName: employeeName,
+        employeeName: attendance.employee_name,
         checkType: attendance.check_type,
-        timestamp: new Date(attendance.timestamp).getTime(), // Convert TIMESTAMP to milliseconds
-        location: attendance.location,
+        timestamp: parseInt(attendance.timestamp), // Already stored as BIGINT
         deviceId: attendance.device_id,
-        syncStatus: attendance.sync_status,
+        syncedAt: attendance.synced_at,
+        confidence: attendance.confidence,
         faceVerified: !!embedding,
-        message: `Successfully recorded ${checkType} for ${employeeName}`
+        message: `Successfully recorded ${checkType} for ${attendance.employee_name}`
       });
     } catch (error) {
       console.error('Error recording attendance:', error);
