@@ -8,7 +8,19 @@ module.exports = (pool) => {
   router.post('/record', async (req, res) => {
     try {
       const { employeeId, checkType, timestamp, deviceId, location, mode = 'ONLINE', embedding } = req.body;
-      
+
+      // Debug logging
+      console.log('Attendance record request:', {
+        employeeId,
+        checkType,
+        timestamp,
+        timestampType: typeof timestamp,
+        deviceId,
+        location,
+        mode,
+        hasEmbedding: !!embedding
+      });
+
       if (!employeeId || !checkType || !deviceId) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
@@ -57,16 +69,17 @@ module.exports = (pool) => {
       const employeeName = empResult.rows[0].name;
 
       // Check for duplicate check-in/out within 5 minutes
-      const fiveMinutesAgo = (timestamp || Date.now()) - (5 * 60 * 1000);
+      const currentTimestamp = timestamp ? parseInt(timestamp) : Date.now();
+      const fiveMinutesAgo = currentTimestamp - (5 * 60 * 1000);
       const duplicateQuery = `
-        SELECT id FROM attendance 
-        WHERE employee_id = $1 
-          AND check_type = $2 
+        SELECT id FROM attendance
+        WHERE employee_id = $1
+          AND check_type = $2
           AND timestamp > $3
         ORDER BY timestamp DESC
         LIMIT 1
       `;
-      
+
       const duplicateResult = await pool.query(duplicateQuery, [
         employeeId,
         checkType,
@@ -93,7 +106,7 @@ module.exports = (pool) => {
         employeeId,
         employeeCode,
         checkType,
-        timestamp || Date.now(),
+        currentTimestamp, // Use the same parsed timestamp
         location || null,
         deviceId,
         mode
@@ -174,7 +187,7 @@ module.exports = (pool) => {
               employeeId,
               employeeCode,
               checkType,
-              timestamp,
+              parseInt(timestamp), // Ensure timestamp is an integer
               location || null,
               deviceId
             ]);
