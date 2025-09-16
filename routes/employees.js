@@ -45,7 +45,18 @@ module.exports = (pool) => {
   router.post('/register', async (req, res) => {
     try {
       const { employeeId, employeeCode, name, department, embedding, faceId } = req.body;
-      
+
+      // Debug logging
+      console.log('Registration request received:', {
+        employeeId,
+        employeeCode,
+        name,
+        department,
+        hasEmbedding: !!embedding,
+        embeddingLength: embedding ? embedding.length : 0,
+        faceId
+      });
+
       if (!employeeCode || !name || !department) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
@@ -110,14 +121,14 @@ module.exports = (pool) => {
       let insertParams;
 
       if (employeeId) {
-        // Use the provided employeeId
+        // Use the provided employeeId with explicit UUID casting
         insertQuery = `
           INSERT INTO employees (employee_id, employee_code, name, department, embedding, face_id)
-          VALUES ($1, $2, $3, $4, $5, $6)
+          VALUES ($1::uuid, $2, $3, $4, $5, $6)
           RETURNING *
         `;
         insertParams = [
-          employeeId,
+          employeeId.toLowerCase(), // Ensure lowercase UUID
           employeeCode,
           name,
           department,
