@@ -70,12 +70,14 @@ module.exports = (pool) => {
 
       // Check for duplicate check-in/out within 5 minutes
       const currentTimestamp = timestamp ? parseInt(timestamp) : Date.now();
-      const fiveMinutesAgo = currentTimestamp - (5 * 60 * 1000);
+      const fiveMinutesAgo = new Date(currentTimestamp - (5 * 60 * 1000));
+
+      // Use proper timestamp comparison for TIMESTAMP column
       const duplicateQuery = `
         SELECT id FROM attendance
         WHERE employee_id = $1
           AND check_type = $2
-          AND timestamp > $3::BIGINT
+          AND timestamp > $3
         ORDER BY timestamp DESC
         LIMIT 1
       `;
@@ -106,7 +108,7 @@ module.exports = (pool) => {
         employeeId,
         employeeCode,
         checkType,
-        currentTimestamp, // Use the same parsed timestamp
+        new Date(currentTimestamp), // Convert to Date for TIMESTAMP column
         location || null,
         deviceId,
         mode
@@ -118,7 +120,7 @@ module.exports = (pool) => {
         employeeId: attendance.employee_id,
         employeeName: employeeName,
         checkType: attendance.check_type,
-        timestamp: attendance.timestamp,
+        timestamp: new Date(attendance.timestamp).getTime(), // Convert TIMESTAMP to milliseconds
         location: attendance.location,
         deviceId: attendance.device_id,
         syncStatus: attendance.sync_status,
@@ -187,7 +189,7 @@ module.exports = (pool) => {
               employeeId,
               employeeCode,
               checkType,
-              parseInt(timestamp), // Ensure timestamp is an integer
+              new Date(parseInt(timestamp)), // Convert to Date for TIMESTAMP column
               location || null,
               deviceId
             ]);
@@ -228,11 +230,11 @@ module.exports = (pool) => {
       const params = [employeeId];
 
       if (startDate && endDate) {
-        query += ' AND timestamp BETWEEN $2::BIGINT AND $3::BIGINT';
-        params.push(new Date(startDate).getTime(), new Date(endDate).getTime());
+        query += ' AND timestamp BETWEEN $2 AND $3';
+        params.push(new Date(startDate), new Date(endDate));
       } else {
-        const daysAgo = Date.now() - (parseInt(days) * 24 * 60 * 60 * 1000);
-        query += ' AND timestamp > $2::BIGINT';
+        const daysAgo = new Date(Date.now() - (parseInt(days) * 24 * 60 * 60 * 1000));
+        query += ' AND timestamp > $2';
         params.push(daysAgo);
       }
 
@@ -244,7 +246,7 @@ module.exports = (pool) => {
         id: record.id,
         employeeId: record.employee_id,
         checkType: record.check_type,
-        timestamp: parseInt(record.timestamp),
+        timestamp: new Date(record.timestamp).getTime(), // Convert TIMESTAMP to milliseconds
         location: record.location,
         deviceId: record.device_id,
         syncStatus: record.sync_status,
@@ -263,8 +265,10 @@ module.exports = (pool) => {
     try {
       const { date = new Date().toISOString().split('T')[0] } = req.query;
       
-      const startOfDay = new Date(date).setHours(0, 0, 0, 0);
-      const endOfDay = new Date(date).setHours(23, 59, 59, 999);
+      const startOfDay = new Date(date);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(date);
+      endOfDay.setHours(23, 59, 59, 999);
 
       const query = `
         SELECT
@@ -276,7 +280,7 @@ module.exports = (pool) => {
             SELECT timestamp FROM attendance
             WHERE employee_id = e.employee_id
               AND check_type = 'IN'
-              AND timestamp BETWEEN $1::BIGINT AND $2::BIGINT
+              AND timestamp BETWEEN $1 AND $2
             ORDER BY timestamp ASC
             LIMIT 1
           ) as first_check_in,
@@ -284,7 +288,7 @@ module.exports = (pool) => {
             SELECT timestamp FROM attendance
             WHERE employee_id = e.employee_id
               AND check_type = 'OUT'
-              AND timestamp BETWEEN $1::BIGINT AND $2::BIGINT
+              AND timestamp BETWEEN $1 AND $2
             ORDER BY timestamp DESC
             LIMIT 1
           ) as last_check_out
@@ -300,11 +304,11 @@ module.exports = (pool) => {
         employeeCode: row.employee_code,
         name: row.name,
         department: row.department,
-        firstCheckIn: row.first_check_in ? parseInt(row.first_check_in) : null,
-        lastCheckOut: row.last_check_out ? parseInt(row.last_check_out) : null,
+        firstCheckIn: row.first_check_in ? new Date(row.first_check_in).getTime() : null,
+        lastCheckOut: row.last_check_out ? new Date(row.last_check_out).getTime() : null,
         status: row.first_check_in ? 'Present' : 'Absent',
-        workingHours: row.first_check_in && row.last_check_out 
-          ? ((parseInt(row.last_check_out) - parseInt(row.first_check_in)) / (1000 * 60 * 60)).toFixed(2)
+        workingHours: row.first_check_in && row.last_check_out
+          ? ((new Date(row.last_check_out).getTime() - new Date(row.first_check_in).getTime()) / (1000 * 60 * 60)).toFixed(2)
           : null
       }));
 
@@ -327,22 +331,22 @@ module.exports = (pool) => {
       const { employeeId } = req.params;
       const { month = new Date().getMonth() + 1, year = new Date().getFullYear() } = req.query;
 
-      const startDate = new Date(year, month - 1, 1).getTime();
-      const endDate = new Date(year, month, 0, 23, 59, 59, 999).getTime();
+      const startDate = new Date(year, month - 1, 1);
+      const endDate = new Date(year, month, 0, 23, 59, 59, 999);
 
       const query = `
         SELECT
-          COUNT(DISTINCT DATE(to_timestamp(timestamp/1000))) as days_present,
+          COUNT(DISTINCT DATE(timestamp)) as days_present,
           AVG(
             CASE
-              WHEN check_type = 'OUT' THEN timestamp
-              WHEN check_type = 'IN' THEN -timestamp
+              WHEN check_type = 'OUT' THEN EXTRACT(EPOCH FROM timestamp)
+              WHEN check_type = 'IN' THEN -EXTRACT(EPOCH FROM timestamp)
               ELSE 0
             END
           ) as avg_working_hours
         FROM attendance
         WHERE employee_id = $1
-          AND timestamp BETWEEN $2::BIGINT AND $3::BIGINT
+          AND timestamp BETWEEN $2 AND $3
       `;
 
       const result = await pool.query(query, [employeeId, startDate, endDate]);
