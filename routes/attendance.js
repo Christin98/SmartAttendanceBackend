@@ -70,9 +70,9 @@ module.exports = (pool) => {
 
       // Check for duplicate check-in/out within 5 minutes
       const currentTimestamp = timestamp ? parseInt(timestamp) : Date.now();
-      const fiveMinutesAgo = new Date(currentTimestamp - (5 * 60 * 1000));
+      const fiveMinutesAgo = currentTimestamp - (5 * 60 * 1000);
 
-      // Use proper timestamp comparison for TIMESTAMP column
+      // Use BIGINT comparison for timestamp column
       const duplicateQuery = `
         SELECT id FROM attendance
         WHERE employee_id = $1
@@ -108,7 +108,7 @@ module.exports = (pool) => {
         employeeId,
         employeeCode,
         checkType,
-        new Date(currentTimestamp), // Convert to Date for TIMESTAMP column
+        currentTimestamp, // Pass as BIGINT (milliseconds since epoch)
         location || null,
         deviceId,
         mode
