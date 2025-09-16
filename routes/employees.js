@@ -44,34 +44,103 @@ module.exports = (pool) => {
   // Register new employee
   router.post('/register', async (req, res) => {
     try {
-      const { employeeCode, name, department, embedding, faceId } = req.body;
+      const { employeeId, employeeCode, name, department, embedding, faceId } = req.body;
       
       if (!employeeCode || !name || !department) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
 
-      // Check if employee code already exists
-      const checkQuery = 'SELECT employee_id FROM employees WHERE employee_code = $1';
-      const checkResult = await pool.query(checkQuery, [employeeCode]);
-      
-      if (checkResult.rows.length > 0) {
-        return res.status(409).json({ error: 'Employee code already exists' });
+      // Check if employee already exists (by employeeId if provided, otherwise by employeeCode)
+      let checkQuery;
+      let checkParams;
+
+      if (employeeId) {
+        // First check if this employeeId already exists
+        checkQuery = 'SELECT employee_id, employee_code FROM employees WHERE employee_id = $1';
+        checkParams = [employeeId];
+      } else {
+        // If no employeeId provided, check by employeeCode
+        checkQuery = 'SELECT employee_id, employee_code FROM employees WHERE employee_code = $1';
+        checkParams = [employeeCode];
       }
 
-      // Insert new employee
-      const insertQuery = `
-        INSERT INTO employees (employee_code, name, department, embedding, face_id)
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING *
-      `;
+      const checkResult = await pool.query(checkQuery, checkParams);
       
-      const result = await pool.query(insertQuery, [
-        employeeCode,
-        name,
-        department,
-        embedding || null,
-        faceId || null
-      ]);
+      if (checkResult.rows.length > 0) {
+        // If employee exists and employeeId matches, it's likely a re-registration/update
+        if (employeeId && checkResult.rows[0].employee_id === employeeId) {
+          // Update existing employee instead of creating new
+          const updateQuery = `
+            UPDATE employees
+            SET name = $2,
+                department = $3,
+                embedding = $4,
+                face_id = $5,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE employee_id = $1
+            RETURNING *
+          `;
+
+          const result = await pool.query(updateQuery, [
+            employeeId,
+            name,
+            department,
+            embedding || null,
+            faceId || null
+          ]);
+
+          const employee = result.rows[0];
+          return res.status(200).json({
+            employeeId: employee.employee_id,
+            employeeCode: employee.employee_code,
+            name: employee.name,
+            department: employee.department,
+            faceId: employee.face_id,
+            embedding: employee.embedding,
+            registrationDate: employee.registration_date.getTime(),
+            isActive: employee.is_active
+          });
+        } else {
+          return res.status(409).json({ error: 'Employee already exists' });
+        }
+      }
+
+      // Insert new employee with provided employeeId if available
+      let insertQuery;
+      let insertParams;
+
+      if (employeeId) {
+        // Use the provided employeeId
+        insertQuery = `
+          INSERT INTO employees (employee_id, employee_code, name, department, embedding, face_id)
+          VALUES ($1, $2, $3, $4, $5, $6)
+          RETURNING *
+        `;
+        insertParams = [
+          employeeId,
+          employeeCode,
+          name,
+          department,
+          embedding || null,
+          faceId || null
+        ];
+      } else {
+        // Let PostgreSQL generate the employeeId
+        insertQuery = `
+          INSERT INTO employees (employee_code, name, department, embedding, face_id)
+          VALUES ($1, $2, $3, $4, $5)
+          RETURNING *
+        `;
+        insertParams = [
+          employeeCode,
+          name,
+          department,
+          embedding || null,
+          faceId || null
+        ];
+      }
+
+      const result = await pool.query(insertQuery, insertParams);
       
       const employee = result.rows[0];
       res.status(201).json({
