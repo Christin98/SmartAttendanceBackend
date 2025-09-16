@@ -75,7 +75,7 @@ module.exports = (pool) => {
         SELECT id FROM attendance
         WHERE employee_id = $1
           AND check_type = $2
-          AND timestamp > $3
+          AND timestamp > $3::BIGINT
         ORDER BY timestamp DESC
         LIMIT 1
       `;
@@ -228,11 +228,11 @@ module.exports = (pool) => {
       const params = [employeeId];
 
       if (startDate && endDate) {
-        query += ' AND timestamp BETWEEN $2 AND $3';
+        query += ' AND timestamp BETWEEN $2::BIGINT AND $3::BIGINT';
         params.push(new Date(startDate).getTime(), new Date(endDate).getTime());
       } else {
         const daysAgo = Date.now() - (parseInt(days) * 24 * 60 * 60 * 1000);
-        query += ' AND timestamp > $2';
+        query += ' AND timestamp > $2::BIGINT';
         params.push(daysAgo);
       }
 
@@ -267,24 +267,24 @@ module.exports = (pool) => {
       const endOfDay = new Date(date).setHours(23, 59, 59, 999);
 
       const query = `
-        SELECT 
+        SELECT
           e.employee_id,
           e.employee_code,
           e.name,
           e.department,
           (
-            SELECT timestamp FROM attendance 
-            WHERE employee_id = e.employee_id 
-              AND check_type = 'IN' 
-              AND timestamp BETWEEN $1 AND $2
+            SELECT timestamp FROM attendance
+            WHERE employee_id = e.employee_id
+              AND check_type = 'IN'
+              AND timestamp BETWEEN $1::BIGINT AND $2::BIGINT
             ORDER BY timestamp ASC
             LIMIT 1
           ) as first_check_in,
           (
-            SELECT timestamp FROM attendance 
-            WHERE employee_id = e.employee_id 
-              AND check_type = 'OUT' 
-              AND timestamp BETWEEN $1 AND $2
+            SELECT timestamp FROM attendance
+            WHERE employee_id = e.employee_id
+              AND check_type = 'OUT'
+              AND timestamp BETWEEN $1::BIGINT AND $2::BIGINT
             ORDER BY timestamp DESC
             LIMIT 1
           ) as last_check_out
@@ -331,10 +331,10 @@ module.exports = (pool) => {
       const endDate = new Date(year, month, 0, 23, 59, 59, 999).getTime();
 
       const query = `
-        SELECT 
+        SELECT
           COUNT(DISTINCT DATE(to_timestamp(timestamp/1000))) as days_present,
           AVG(
-            CASE 
+            CASE
               WHEN check_type = 'OUT' THEN timestamp
               WHEN check_type = 'IN' THEN -timestamp
               ELSE 0
@@ -342,7 +342,7 @@ module.exports = (pool) => {
           ) as avg_working_hours
         FROM attendance
         WHERE employee_id = $1
-          AND timestamp BETWEEN $2 AND $3
+          AND timestamp BETWEEN $2::BIGINT AND $3::BIGINT
       `;
 
       const result = await pool.query(query, [employeeId, startDate, endDate]);
