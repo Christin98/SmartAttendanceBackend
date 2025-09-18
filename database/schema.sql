@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS attendance (
     employee_code VARCHAR(50) NOT NULL,
     check_type VARCHAR(10) NOT NULL CHECK (check_type IN ('IN', 'OUT')),
     timestamp BIGINT NOT NULL, -- Unix timestamp in milliseconds
-    location VARCHAR(255),
+    location TEXT, -- Can store JSON strings for detailed location data
     device_id VARCHAR(255) NOT NULL,
     sync_status VARCHAR(20) DEFAULT 'SYNCED',
     confidence FLOAT,
@@ -36,7 +36,12 @@ CREATE TABLE IF NOT EXISTS attendance (
 CREATE INDEX idx_attendance_employee_id ON attendance(employee_id);
 CREATE INDEX idx_attendance_timestamp ON attendance(timestamp);
 CREATE INDEX idx_attendance_sync_status ON attendance(sync_status);
+CREATE INDEX idx_attendance_location ON attendance(location) WHERE location IS NOT NULL;
 CREATE INDEX idx_employees_embedding ON employees USING GIN(embedding);
+
+-- Constraints for data validation
+ALTER TABLE attendance ADD CONSTRAINT location_valid_json
+    CHECK (location IS NULL OR location = '' OR (location::json IS NOT NULL));
 
 -- Function to calculate cosine similarity between embeddings
 CREATE OR REPLACE FUNCTION cosine_similarity(a FLOAT[], b FLOAT[])

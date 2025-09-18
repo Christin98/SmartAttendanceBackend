@@ -98,9 +98,9 @@ module.exports = (pool) => {
       const insertQuery = `
         INSERT INTO attendance (
           employee_id, employee_name, check_type, timestamp,
-          device_id, synced_at, confidence
+          device_id, location, synced_at, confidence
         )
-        VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, 1.0)
+        VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, 1.0)
         RETURNING *
       `;
 
@@ -109,7 +109,8 @@ module.exports = (pool) => {
         employeeName,
         checkType,
         currentTimestamp, // Pass as BIGINT (milliseconds since epoch)
-        deviceId
+        deviceId,
+        location || null
       ]);
       
       const attendance = result.rows[0];
@@ -120,6 +121,7 @@ module.exports = (pool) => {
         checkType: attendance.check_type,
         timestamp: parseInt(attendance.timestamp), // Already stored as BIGINT
         deviceId: attendance.device_id,
+        location: attendance.location,
         syncedAt: attendance.synced_at,
         confidence: attendance.confidence,
         faceVerified: !!embedding,
