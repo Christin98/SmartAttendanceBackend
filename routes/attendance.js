@@ -97,16 +97,16 @@ module.exports = (pool) => {
       // Insert attendance record
       const insertQuery = `
         INSERT INTO attendance (
-          employee_id, employee_name, check_type, timestamp,
-          device_id, location, synced_at, confidence
+          employee_id, employee_code, check_type, timestamp,
+          device_id, location, confidence
         )
-        VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, 1.0)
+        VALUES ($1, $2, $3, $4, $5, $6, 1.0)
         RETURNING *
       `;
 
       const result = await pool.query(insertQuery, [
         employeeId,
-        employeeName,
+        employeeCode,
         checkType,
         currentTimestamp, // Pass as BIGINT (milliseconds since epoch)
         deviceId,
