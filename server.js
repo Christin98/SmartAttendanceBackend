@@ -43,6 +43,8 @@ const validateApiKey = (req, res, next) => {
 // Routes
 app.use('/api/employees', validateApiKey, require('./routes/employees')(pool));
 app.use('/api/attendance', validateApiKey, require('./routes/attendance')(pool));
+// Trial routes (no API key required for trial validation/registration)
+app.use('/api/trial', require('./routes/trial')(pool));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
